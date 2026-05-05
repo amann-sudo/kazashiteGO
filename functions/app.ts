@@ -250,7 +250,9 @@ function renderAppPage(
         </div>
         <p>ログインなしで仮保存中です。あとでログイン連携を追加すると、このポイントを会員アカウントに引き継げます。</p>
         <div class="actions">
-          <a href="/t/kg-0001">NFCデモを開く</a>
+          <a href="/t/kg-0001">NFC 01</a>
+          <a href="/t/kg-0002">NFC 02</a>
+          <a href="/t/kg-0003">NFC 03</a>
           <a class="secondary" href="/admin">管理画面</a>
         </div>
         <span class="user-id">匿名ユーザー: ${escapeHtml(userId)}</span>

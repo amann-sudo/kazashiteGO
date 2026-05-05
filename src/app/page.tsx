@@ -96,6 +96,12 @@ const rangeLabels: Record<RangeMode, string> = {
   monthly: "月次",
 };
 
+const fallbackTags = [
+  { id: "kg-0001" },
+  { id: "kg-0002" },
+  { id: "kg-0003" },
+];
+
 const nf = new Intl.NumberFormat("ja-JP");
 
 export default function Home() {
@@ -186,9 +192,13 @@ export default function Home() {
           <p className="eyebrow">kazashiteGO</p>
           <h1>NFC広告管理画面</h1>
         </div>
-        <a className="scan-link" href="/t/kg-0001">
-          サンプルNFCを開く
-        </a>
+        <div className="scan-link-group" aria-label="サンプルNFC">
+          {(summary?.tags ?? fallbackTags).map((tag) => (
+            <a className="scan-link" href={`/t/${tag.id}`} key={tag.id}>
+              {tag.id}
+            </a>
+          ))}
+        </div>
       </header>
 
       <section className="metric-grid" aria-label="主要指標">

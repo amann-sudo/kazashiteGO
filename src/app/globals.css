@@ -88,6 +88,13 @@ h2 {
   line-height: 1.25;
 }
 
+.scan-link-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .scan-link,
 .segment-control button {
   border: 1px solid var(--line);
@@ -552,6 +559,11 @@ input[type="number"] {
 
   .scan-link {
     width: 100%;
+  }
+
+  .scan-link-group {
+    width: 100%;
+    justify-content: stretch;
   }
 
   .metric-grid,

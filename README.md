@@ -36,19 +36,25 @@ npm run pages:dev
 起動後に開くURLです。
 
 - 管理画面: [http://127.0.0.1:8788/admin](http://127.0.0.1:8788/admin)
-- サンプルNFC: [http://127.0.0.1:8788/t/kg-0001](http://127.0.0.1:8788/t/kg-0001)
+- サンプルNFC 01: [http://127.0.0.1:8788/t/kg-0001](http://127.0.0.1:8788/t/kg-0001)
+- サンプルNFC 02: [http://127.0.0.1:8788/t/kg-0002](http://127.0.0.1:8788/t/kg-0002)
+- サンプルNFC 03: [http://127.0.0.1:8788/t/kg-0003](http://127.0.0.1:8788/t/kg-0003)
 - ユーザーポイント画面: [http://127.0.0.1:8788/app](http://127.0.0.1:8788/app)
 
 ## 現在の公開URL
 
 - 管理画面: [https://kazashitego.kazashitego-go.workers.dev/admin](https://kazashitego.kazashitego-go.workers.dev/admin)
-- ユーザー画面 / NFC読み取り先: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0001](https://kazashitego.kazashitego-go.workers.dev/t/kg-0001)
+- ユーザー画面 / NFC読み取り先 01: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0001](https://kazashitego.kazashitego-go.workers.dev/t/kg-0001)
+- ユーザー画面 / NFC読み取り先 02: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0002](https://kazashitego.kazashitego-go.workers.dev/t/kg-0002)
+- ユーザー画面 / NFC読み取り先 03: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0003](https://kazashitego.kazashitego-go.workers.dev/t/kg-0003)
 - ユーザーポイント画面: [https://kazashitego.kazashitego-go.workers.dev/app](https://kazashitego.kazashitego-go.workers.dev/app)
 
 NFCタグには、次のURLをNDEFのURIレコードとして書き込みます。
 
 ```text
 https://kazashitego.kazashitego-go.workers.dev/t/kg-0001
+https://kazashitego.kazashitego-go.workers.dev/t/kg-0002
+https://kazashitego.kazashitego-go.workers.dev/t/kg-0003
 ```
 
 ## 主なコマンド
