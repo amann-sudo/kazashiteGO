@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 
 // サイト全体で使う基本メタデータです。
 export const metadata: Metadata = {
-  title: "Hakkasonn",
-  description: "Next.js で作成した開発環境です。",
+  title: "かざしてGO",
+  description: "かざしてGO のサービスサイトです。",
 };
 
 export default function RootLayout({
