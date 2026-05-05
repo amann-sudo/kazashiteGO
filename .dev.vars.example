@@ -1,0 +1,2 @@
+# ローカル開発用の管理画面パスワードです。本物の値は .dev.vars に置き、Gitには含めません。
+ADMIN_PASSWORD=change-this-password

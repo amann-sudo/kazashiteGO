@@ -1,6 +1,7 @@
 import {
   json,
   methodNotAllowed,
+  requireAdmin,
   type Env,
   scalarParam,
 } from "../../../lib/shared";
@@ -12,6 +13,12 @@ type UpdateTagRequest = {
 };
 
 export const onRequest: PagesFunction<Env, "tagId"> = async (context) => {
+  const denied = await requireAdmin(context.request, context.env);
+
+  if (denied) {
+    return denied;
+  }
+
   if (context.request.method !== "PATCH") {
     return methodNotAllowed();
   }

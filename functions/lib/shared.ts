@@ -1,5 +1,6 @@
 export type Env = {
   DB: D1Database;
+  ADMIN_PASSWORD?: string;
 };
 
 export type CampaignForTag = {
@@ -32,6 +33,35 @@ export function json(data: unknown, init: ResponseInit = {}) {
 
 export function methodNotAllowed() {
   return json({ error: "許可されていないHTTPメソッドです。" }, { status: 405 });
+}
+
+export async function requireAdmin(request: Request, env: Env) {
+  const password = env.ADMIN_PASSWORD;
+
+  if (!password) {
+    return json(
+      { error: "ADMIN_PASSWORDが未設定のため管理画面を利用できません。" },
+      { status: 503 },
+    );
+  }
+
+  const credentials = parseBasicAuth(request.headers.get("Authorization"));
+
+  if (
+    credentials?.username === "admin" &&
+    (await timingSafeEqual(credentials.password, password))
+  ) {
+    return null;
+  }
+
+  const headers = new Headers({
+    "WWW-Authenticate": 'Basic realm="kazashiteGO Admin", charset="UTF-8"',
+  });
+
+  return json(
+    { error: "管理画面の認証が必要です。" },
+    { status: 401, headers },
+  );
 }
 
 export function scalarParam(value: string | string[] | undefined) {
@@ -101,6 +131,50 @@ export async function getVisitorIdentity(request: Request) {
     visitorHash: toHex(digest),
     setCookie: cookieHeader.includes(`${visitorCookieName}=`) ? "" : buildCookie(request, visitorId),
   };
+}
+
+function parseBasicAuth(header: string | null) {
+  if (!header?.startsWith("Basic ")) {
+    return null;
+  }
+
+  try {
+    const decoded = atob(header.slice("Basic ".length));
+    const separatorIndex = decoded.indexOf(":");
+
+    if (separatorIndex === -1) {
+      return null;
+    }
+
+    return {
+      username: decoded.slice(0, separatorIndex),
+      password: decoded.slice(separatorIndex + 1),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function timingSafeEqual(actual: string, expected: string) {
+  // パスワードの比較時間から値を推測されにくくするため、ハッシュ化してから固定長で比較します。
+  const [actualDigest, expectedDigest] = await Promise.all([
+    sha256(actual),
+    sha256(expected),
+  ]);
+
+  let diff = 0;
+  const actualBytes = new Uint8Array(actualDigest);
+  const expectedBytes = new Uint8Array(expectedDigest);
+
+  for (let index = 0; index < expectedBytes.length; index += 1) {
+    diff |= actualBytes[index] ^ expectedBytes[index];
+  }
+
+  return diff === 0;
+}
+
+function sha256(value: string) {
+  return crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
 }
 
 function readCookie(cookieHeader: string, name: string) {

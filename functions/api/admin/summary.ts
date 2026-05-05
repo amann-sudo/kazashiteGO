@@ -2,6 +2,7 @@ import {
   getJapanDay,
   json,
   methodNotAllowed,
+  requireAdmin,
   type Env,
 } from "../../lib/shared";
 
@@ -14,6 +15,12 @@ const periodSql: Record<RangeMode, string> = {
 };
 
 export const onRequest: PagesFunction<Env> = async (context) => {
+  const denied = await requireAdmin(context.request, context.env);
+
+  if (denied) {
+    return denied;
+  }
+
   if (context.request.method !== "GET") {
     return methodNotAllowed();
   }
