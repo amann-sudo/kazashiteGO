@@ -3,6 +3,18 @@ export type Env = {
   ADMIN_PASSWORD?: string;
 };
 
+export type VisitorIdentity = {
+  visitorHash: string;
+  setCookie: string;
+};
+
+export type AppUser = {
+  id: string;
+  anonymous_id_hash: string;
+  display_name: string | null;
+  linked_at: string | null;
+};
+
 export type CampaignForTag = {
   tag_id: string;
   tag_label: string;
@@ -119,7 +131,7 @@ export async function getCampaignForTag(env: Env, tagId: string) {
     .first<CampaignForTag>();
 }
 
-export async function getVisitorIdentity(request: Request) {
+export async function getVisitorIdentity(request: Request): Promise<VisitorIdentity> {
   const cookieHeader = request.headers.get("Cookie") ?? "";
   const visitorId = readCookie(cookieHeader, visitorCookieName) ?? crypto.randomUUID();
   const digest = await crypto.subtle.digest(
@@ -131,6 +143,65 @@ export async function getVisitorIdentity(request: Request) {
     visitorHash: toHex(digest),
     setCookie: cookieHeader.includes(`${visitorCookieName}=`) ? "" : buildCookie(request, visitorId),
   };
+}
+
+export function getAnonymousUserId(visitorHash: string) {
+  return `anon_${visitorHash.slice(0, 24)}`;
+}
+
+export async function getOrCreateUser(env: Env, request: Request) {
+  const visitor = await getVisitorIdentity(request);
+  const userId = getAnonymousUserId(visitor.visitorHash);
+
+  // ログインなしでもポイントを保存できるよう、端末Cookie由来の匿名ユーザーをD1に作ります。
+  await env.DB.prepare(
+    `
+      INSERT INTO users (
+        id,
+        anonymous_id_hash,
+        created_at,
+        last_seen_at
+      )
+      VALUES (?, ?, datetime('now'), datetime('now'))
+      ON CONFLICT(anonymous_id_hash)
+      DO UPDATE SET last_seen_at = datetime('now')
+    `,
+  )
+    .bind(userId, visitor.visitorHash)
+    .run();
+
+  await env.DB.prepare(
+    `
+      INSERT INTO user_point_balances (
+        user_id,
+        balance,
+        lifetime_points,
+        updated_at
+      )
+      VALUES (?, 0, 0, datetime('now'))
+      ON CONFLICT(user_id)
+      DO NOTHING
+    `,
+  )
+    .bind(userId)
+    .run();
+
+  const user = await env.DB.prepare(
+    `
+      SELECT id, anonymous_id_hash, display_name, linked_at
+      FROM users
+      WHERE anonymous_id_hash = ?
+      LIMIT 1
+    `,
+  )
+    .bind(visitor.visitorHash)
+    .first<AppUser>();
+
+  if (!user) {
+    throw new Error("匿名ユーザーの作成に失敗しました。");
+  }
+
+  return { user, visitor };
 }
 
 function parseBasicAuth(header: string | null) {

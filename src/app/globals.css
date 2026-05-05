@@ -110,7 +110,7 @@ h2 {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -502,6 +502,35 @@ input[type="number"] {
 .event-row span {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.user-table {
+  min-width: 820px;
+}
+
+.user-header,
+.user-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.6fr) 0.65fr 0.65fr 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.user-header {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.user-row > span:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.user-row strong {
+  color: var(--accent-strong);
 }
 
 .status-message {

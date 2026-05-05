@@ -2,11 +2,29 @@ import {
   escapeHtml,
   getCampaignForTag,
   getJapanDay,
-  getVisitorIdentity,
+  getOrCreateUser,
+  type AppUser,
   type CampaignForTag,
   type Env,
   scalarParam,
 } from "../lib/shared";
+
+type PointBalance = {
+  balance: number;
+  lifetime_points: number;
+};
+
+type ActiveLock = {
+  locked_until: string;
+};
+
+type RewardResult = {
+  awarded: boolean;
+  balance: number;
+  lifetimePoints: number;
+  points: number;
+  lockedUntil: string | null;
+};
 
 export const onRequest: PagesFunction<Env, "tagId"> = async (context) => {
   if (context.request.method !== "GET") {
@@ -21,27 +39,29 @@ export const onRequest: PagesFunction<Env, "tagId"> = async (context) => {
   }
 
   const day = getJapanDay();
-  const visitor = await getVisitorIdentity(context.request);
+  const { user, visitor } = await getOrCreateUser(context.env, context.request);
   const userAgent = (context.request.headers.get("User-Agent") ?? "").slice(0, 240);
 
-  // 日次集計とは別に、管理画面で時分秒を確認できるよう読み取りイベントを1件ずつ保存します。
+  // 読み取り回数とユーザー別ポイントは分けて保存し、広告閲覧自体は毎回分析できるようにします。
   await context.env.DB.prepare(
     `
       INSERT INTO scan_events (
         id,
         occurred_at,
         day,
+        user_id,
         tag_id,
         campaign_id,
         visitor_id_hash,
         user_agent
       )
-      VALUES (?, datetime('now'), ?, ?, ?, ?, ?)
+      VALUES (?, datetime('now'), ?, ?, ?, ?, ?, ?)
     `,
   )
     .bind(
       crypto.randomUUID(),
       day,
+      user.id,
       campaign.tag_id,
       campaign.campaign_id,
       visitor.visitorHash,
@@ -62,26 +82,13 @@ export const onRequest: PagesFunction<Env, "tagId"> = async (context) => {
     .bind(day, campaign.tag_id, campaign.campaign_id)
     .run();
 
-  const pointResult = await context.env.DB.prepare(
-    `
-      INSERT OR IGNORE INTO point_claims (
-        day,
-        visitor_id_hash,
-        tag_id,
-        campaign_id,
-        points
-      )
-      VALUES (?, ?, ?, ?, ?)
-    `,
-  )
-    .bind(
-      day,
-      visitor.visitorHash,
-      campaign.tag_id,
-      campaign.campaign_id,
-      campaign.point_value,
-    )
-    .run();
+  const reward = await awardPointsIfUnlocked(
+    context.env,
+    campaign,
+    user.id,
+    visitor.visitorHash,
+    day,
+  );
 
   const headers = new Headers({
     "Content-Type": "text/html; charset=utf-8",
@@ -94,10 +101,157 @@ export const onRequest: PagesFunction<Env, "tagId"> = async (context) => {
     headers.append("Set-Cookie", visitor.setCookie);
   }
 
-  const awarded = (pointResult.meta.changes ?? 0) > 0;
-
-  return new Response(renderAdPage(campaign, awarded), { headers });
+  return new Response(renderAdPage(campaign, user, reward), { headers });
 };
+
+async function awardPointsIfUnlocked(
+  env: Env,
+  campaign: CampaignForTag,
+  userId: string,
+  visitorHash: string,
+  day: string,
+): Promise<RewardResult> {
+  const activeLock = await env.DB.prepare(
+    `
+      SELECT locked_until
+      FROM reward_locks
+      WHERE
+        user_id = ?
+        AND campaign_id = ?
+        AND locked_until > datetime('now')
+      LIMIT 1
+    `,
+  )
+    .bind(userId, campaign.campaign_id)
+    .first<ActiveLock>();
+
+  if (activeLock) {
+    const balance = await getPointBalance(env, userId);
+
+    return {
+      awarded: false,
+      balance: balance.balance,
+      lifetimePoints: balance.lifetime_points,
+      lockedUntil: activeLock.locked_until,
+      points: 0,
+    };
+  }
+
+  const transactionId = crypto.randomUUID();
+
+  // 24時間ロックは広告キャンペーン単位で持ち、同じ広告からの重複付与を防ぎます。
+  await env.DB.batch([
+    env.DB.prepare(
+      `
+        INSERT INTO point_transactions (
+          id,
+          user_id,
+          tag_id,
+          campaign_id,
+          points,
+          reason,
+          occurred_at
+        )
+        VALUES (?, ?, ?, ?, ?, 'nfc_ad_reward', datetime('now'))
+      `,
+    ).bind(
+      transactionId,
+      userId,
+      campaign.tag_id,
+      campaign.campaign_id,
+      campaign.point_value,
+    ),
+    env.DB.prepare(
+      `
+        INSERT INTO user_point_balances (
+          user_id,
+          balance,
+          lifetime_points,
+          updated_at
+        )
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT(user_id)
+        DO UPDATE SET
+          balance = balance + excluded.balance,
+          lifetime_points = lifetime_points + excluded.lifetime_points,
+          updated_at = datetime('now')
+      `,
+    ).bind(userId, campaign.point_value, campaign.point_value),
+    env.DB.prepare(
+      `
+        INSERT INTO reward_locks (
+          user_id,
+          campaign_id,
+          tag_id,
+          locked_until,
+          updated_at
+        )
+        VALUES (?, ?, ?, datetime('now', '+1 day'), datetime('now'))
+        ON CONFLICT(user_id, campaign_id)
+        DO UPDATE SET
+          tag_id = excluded.tag_id,
+          locked_until = excluded.locked_until,
+          updated_at = datetime('now')
+      `,
+    ).bind(userId, campaign.campaign_id, campaign.tag_id),
+    env.DB.prepare(
+      `
+        INSERT OR IGNORE INTO point_claims (
+          day,
+          visitor_id_hash,
+          tag_id,
+          campaign_id,
+          points
+        )
+        VALUES (?, ?, ?, ?, ?)
+      `,
+    ).bind(
+      day,
+      visitorHash,
+      campaign.tag_id,
+      campaign.campaign_id,
+      campaign.point_value,
+    ),
+  ]);
+
+  const balance = await getPointBalance(env, userId);
+  const awardedLock = await env.DB.prepare(
+    `
+      SELECT locked_until
+      FROM reward_locks
+      WHERE user_id = ? AND campaign_id = ?
+      LIMIT 1
+    `,
+  )
+    .bind(userId, campaign.campaign_id)
+    .first<ActiveLock>();
+
+  return {
+    awarded: true,
+    balance: balance.balance,
+    lifetimePoints: balance.lifetime_points,
+    lockedUntil: awardedLock?.locked_until ?? null,
+    points: campaign.point_value,
+  };
+}
+
+async function getPointBalance(env: Env, userId: string) {
+  const balance = await env.DB.prepare(
+    `
+      SELECT balance, lifetime_points
+      FROM user_point_balances
+      WHERE user_id = ?
+      LIMIT 1
+    `,
+  )
+    .bind(userId)
+    .first<PointBalance>();
+
+  return {
+    balance: Number(balance?.balance ?? 0),
+    lifetime_points: Number(balance?.lifetime_points ?? 0),
+  };
+}
 
 function renderNotFound(tagId: string) {
   return new Response(
@@ -111,11 +265,17 @@ function renderNotFound(tagId: string) {
   );
 }
 
-function renderAdPage(campaign: CampaignForTag, awarded: boolean) {
-  const media = renderMedia(campaign);
-  const pointText = awarded
-    ? `${campaign.point_value}ポイントを付与しました`
-    : `本日は付与済みです`;
+function renderAdPage(
+  campaign: CampaignForTag,
+  user: AppUser,
+  reward: RewardResult,
+) {
+  const pointHeadline = reward.awarded
+    ? `${reward.points}pt 獲得`
+    : "24時間ロック中";
+  const pointMessage = reward.awarded
+    ? "この広告のポイントを付与しました。"
+    : `${formatLockTime(reward.lockedUntil)} まで、この広告から追加ポイントは付与されません。`;
 
   return `<!doctype html>
 <html lang="ja">
@@ -126,110 +286,267 @@ function renderAdPage(campaign: CampaignForTag, awarded: boolean) {
     <style>
       :root {
         color-scheme: light;
-        --bg: #f4f6ee;
-        --ink: #17201a;
-        --muted: #5f6b62;
-        --line: #d9dfd4;
-        --accent: #177245;
-        --gold: #e7a622;
+        --bg: #f6f7ef;
+        --ink: #162018;
+        --muted: #5c665d;
+        --line: #dbe1d6;
+        --accent: #176d43;
+        --accent-2: #d9272e;
+        --gold: #f2b21f;
+        --cream: #fff8e4;
       }
 
       * { box-sizing: border-box; }
+
       body {
         min-height: 100vh;
         margin: 0;
-        display: grid;
-        place-items: center;
-        padding: 18px;
         color: var(--ink);
-        background: var(--bg);
+        background:
+          radial-gradient(circle at 12% 4%, #fff5c8 0, transparent 32%),
+          linear-gradient(180deg, #f7f8ef 0%, #edf2ea 100%);
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
       main {
-        width: min(480px, 100%);
+        width: min(520px, 100%);
+        min-height: 100vh;
+        margin: 0 auto;
         display: grid;
-        gap: 14px;
+        align-content: start;
+        gap: 12px;
+        padding: 12px 12px 22px;
       }
 
-      .media {
+      .creative {
+        position: relative;
+        min-height: 560px;
         overflow: hidden;
         border: 1px solid var(--line);
         border-radius: 8px;
         background: #ffffff;
+        box-shadow: 0 22px 60px rgba(17, 32, 21, 0.14);
       }
 
-      img, video {
-        display: block;
+      .creative img,
+      .creative video {
+        position: absolute;
+        inset: 0;
         width: 100%;
-        aspect-ratio: 4 / 5;
+        height: 100%;
         object-fit: cover;
+        transform: scale(1.035);
+        animation: slowZoom 9s ease-in-out infinite alternate;
       }
 
-      .copy {
+      .creative::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(255,255,255,0.12) 32%, rgba(9,22,12,0.08) 68%, rgba(9,22,12,0.66) 100%),
+          radial-gradient(circle at 22% 24%, rgba(255, 210, 49, 0.55), transparent 28%);
+        z-index: 1;
+      }
+
+      .creative::after {
+        content: "";
+        position: absolute;
+        left: -25%;
+        top: 42%;
+        width: 150%;
+        height: 54px;
+        transform: rotate(-8deg);
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.72), transparent);
+        z-index: 2;
+        animation: shine 3.6s ease-in-out infinite;
+      }
+
+      .ad-copy {
+        position: relative;
+        z-index: 3;
         display: grid;
         gap: 10px;
         padding: 18px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #ffffff;
       }
 
-      .shelf {
-        color: var(--accent);
-        font-size: 0.84rem;
-        font-weight: 800;
+      .badge {
+        width: fit-content;
+        border-radius: 999px;
+        padding: 7px 12px;
+        color: #ffffff;
+        background: var(--accent-2);
+        font-size: 0.82rem;
+        font-weight: 900;
+        letter-spacing: 0;
+        box-shadow: 0 8px 18px rgba(217, 39, 46, 0.3);
+        animation: pop 1.8s ease-in-out infinite;
       }
 
       h1 {
+        width: min(360px, 84%);
         margin: 0;
-        font-size: clamp(1.75rem, 8vw, 3.15rem);
-        line-height: 1.03;
+        font-size: clamp(2.1rem, 10vw, 4.2rem);
+        line-height: 0.98;
+        letter-spacing: 0;
+        text-shadow: 0 2px 0 #ffffff;
       }
 
-      p {
+      .description {
+        width: min(340px, 86%);
+        margin: 0;
+        color: #314036;
+        font-size: 0.96rem;
+        font-weight: 700;
+        line-height: 1.65;
+      }
+
+      .point-card {
+        position: relative;
+        z-index: 4;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: center;
+        margin: -74px 12px 0;
+        border: 1px solid rgba(255,255,255,0.8);
+        border-radius: 8px;
+        padding: 14px;
+        color: #211905;
+        background: linear-gradient(135deg, #fff3bc, #ffc94d);
+        box-shadow: 0 16px 34px rgba(41, 33, 6, 0.2);
+      }
+
+      .point-card strong {
+        display: block;
+        font-size: 1.55rem;
+        line-height: 1.05;
+      }
+
+      .point-card span,
+      .point-card p {
+        margin: 0;
+      }
+
+      .point-card p {
+        grid-column: 1 / -1;
+        color: #4a3b0a;
+        font-size: 0.88rem;
+        font-weight: 700;
+        line-height: 1.5;
+      }
+
+      .balance {
+        display: grid;
+        min-width: 96px;
+        justify-items: end;
+        color: #1d2a20;
+        font-weight: 900;
+      }
+
+      .balance b {
+        font-size: 1.9rem;
+        line-height: 1;
+      }
+
+      .app-card {
+        display: grid;
+        gap: 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        background: #ffffff;
+      }
+
+      .app-card p {
         margin: 0;
         color: var(--muted);
         line-height: 1.65;
       }
 
-      .point {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        min-height: 48px;
-        padding: 0 14px;
-        border-radius: 8px;
-        color: #2a2103;
-        background: #ffe7a4;
-        font-weight: 800;
+      .app-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
       }
 
-      .cta {
+      .app-actions a {
         display: inline-flex;
-        min-height: 46px;
+        min-height: 44px;
         align-items: center;
         justify-content: center;
         border-radius: 8px;
         color: #ffffff;
         background: var(--accent);
-        font-weight: 800;
+        font-weight: 900;
         text-decoration: none;
+      }
+
+      .app-actions a.secondary {
+        color: var(--accent);
+        background: #edf6ef;
+      }
+
+      .user-id {
+        overflow-wrap: anywhere;
+        color: #6b746d;
+        font-size: 0.78rem;
+      }
+
+      @keyframes slowZoom {
+        from { transform: scale(1.02) translateY(0); }
+        to { transform: scale(1.08) translateY(-8px); }
+      }
+
+      @keyframes shine {
+        0%, 42% { transform: translateX(-30%) rotate(-8deg); opacity: 0; }
+        58% { opacity: 1; }
+        100% { transform: translateX(35%) rotate(-8deg); opacity: 0; }
+      }
+
+      @keyframes pop {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+      }
+
+      @media (max-width: 420px) {
+        .creative { min-height: 500px; }
+        .app-actions { grid-template-columns: 1fr; }
       }
     </style>
   </head>
   <body>
     <main>
-      <section class="media">${media}</section>
-      <section class="copy">
-        <span class="shelf">${escapeHtml(campaign.shelf_name)}</span>
-        <h1>${escapeHtml(campaign.title)}</h1>
-        <p>${escapeHtml(campaign.description)}</p>
-        <div class="point"><span>${escapeHtml(pointText)}</span><span>${escapeHtml(
-          campaign.store_name,
-        )}</span></div>
-        ${renderCta(campaign)}
+      <section class="creative">
+        ${renderMedia(campaign)}
+        <div class="ad-copy">
+          <span class="badge">NFC限定キャンペーン</span>
+          <h1>${escapeHtml(campaign.title)}</h1>
+          <p class="description">${escapeHtml(campaign.description)}</p>
+        </div>
+      </section>
+
+      <section class="point-card">
+        <div>
+          <span>${escapeHtml(pointMessage)}</span>
+          <strong>${escapeHtml(pointHeadline)}</strong>
+        </div>
+        <div class="balance">
+          <span>保有</span>
+          <b>${escapeHtml(reward.balance)}pt</b>
+        </div>
+        <p>${escapeHtml(campaign.store_name)} / ${escapeHtml(
+          campaign.shelf_name,
+        )}</p>
+      </section>
+
+      <section class="app-card">
+        <p>ログインなしでポイントを仮保存しています。あとでログイン連携を追加すると、この匿名ポイントを会員アカウントへ引き継げる設計です。</p>
+        <div class="app-actions">
+          <a href="/app">ポイントを見る</a>
+          ${renderCta(campaign)}
+        </div>
+        <span class="user-id">匿名ユーザー: ${escapeHtml(user.id)}</span>
       </section>
     </main>
   </body>
@@ -240,7 +557,7 @@ function renderMedia(campaign: CampaignForTag) {
   const src = escapeHtml(campaign.media_path);
 
   if (campaign.media_type === "video") {
-    return `<video src="${src}" autoplay muted playsinline controls></video>`;
+    return `<video src="${src}" autoplay muted playsinline loop></video>`;
   }
 
   return `<img src="${src}" alt="${escapeHtml(campaign.title)}" />`;
@@ -248,10 +565,30 @@ function renderMedia(campaign: CampaignForTag) {
 
 function renderCta(campaign: CampaignForTag) {
   if (!campaign.cta_label || !campaign.cta_url || campaign.cta_url === "#") {
-    return "";
+    return `<a class="secondary" href="/app">あとで使う</a>`;
   }
 
-  return `<a class="cta" href="${escapeHtml(campaign.cta_url)}">${escapeHtml(
+  return `<a class="secondary" href="${escapeHtml(campaign.cta_url)}">${escapeHtml(
     campaign.cta_label,
   )}</a>`;
+}
+
+function formatLockTime(value: string | null) {
+  if (!value) {
+    return "24時間後";
+  }
+
+  const date = new Date(`${value.replace(" ", "T")}Z`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "numeric",
+    timeZone: "Asia/Tokyo",
+  }).format(date);
 }
