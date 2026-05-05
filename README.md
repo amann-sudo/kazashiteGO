@@ -44,9 +44,9 @@ npm run pages:dev
 ## 現在の公開URL
 
 - 管理画面: [https://kazashitego.kazashitego-go.workers.dev/admin](https://kazashitego.kazashitego-go.workers.dev/admin)
-- ユーザー画面 / NFC読み取り先 01: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0001](https://kazashitego.kazashitego-go.workers.dev/t/kg-0001)
-- ユーザー画面 / NFC読み取り先 02: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0002](https://kazashitego.kazashitego-go.workers.dev/t/kg-0002)
-- ユーザー画面 / NFC読み取り先 03: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0003](https://kazashitego.kazashitego-go.workers.dev/t/kg-0003)
+- NFC読み取り先 01: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0001](https://kazashitego.kazashitego-go.workers.dev/t/kg-0001)
+- NFC読み取り先 02: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0002](https://kazashitego.kazashitego-go.workers.dev/t/kg-0002)
+- NFC読み取り先 03: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0003](https://kazashitego.kazashitego-go.workers.dev/t/kg-0003)
 - ユーザーポイント画面: [https://kazashitego.kazashitego-go.workers.dev/app](https://kazashitego.kazashitego-go.workers.dev/app)
 
 NFCタグには、次のURLをNDEFのURIレコードとして書き込みます。
@@ -72,6 +72,9 @@ npm run pages:dev
 - ポイント残高は `user_point_balances`、付与履歴は `point_transactions` に保存します。
 - 同じ広告キャンペーンは、ユーザーごとに `reward_locks` で日本時間の日付が変わるまで再付与されません。
 - 将来ログイン機能を追加すると、匿名ユーザーのポイントを会員ユーザーへ引き継ぐ前提の構成です。
+- ユーザーポイント画面 `/app` には、NFC読み取り先や管理画面へのリンクを出しません。
+- ユーザーポイント画面 `/app` の履歴では、`NFC 01` のようなNFC番号を表示せず、売り場名だけを表示します。
+- iPhone Safariの自動電話番号検出を避けるため、ユーザー向けページでは `telephone=no` を指定し、履歴日時は日本語表記にしています。
 
 ## Cloudflareへ置くとき
 

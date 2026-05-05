@@ -101,6 +101,7 @@ function renderAppPage(
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="format-detection" content="telephone=no" />
     <title>ポイント | kazashiteGO</title>
     <style>
       :root {
@@ -184,29 +185,6 @@ function renderAppPage(
         line-height: 1.6;
       }
 
-      .actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-      }
-
-      a {
-        display: inline-flex;
-        min-height: 44px;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px;
-        color: #ffffff;
-        background: var(--accent);
-        font-weight: 900;
-        text-decoration: none;
-      }
-
-      a.secondary {
-        color: var(--accent);
-        background: #edf6ef;
-      }
-
       .panel {
         display: grid;
         gap: 10px;
@@ -228,14 +206,20 @@ function renderAppPage(
         font-size: 0.98rem;
       }
 
+      .history-meta {
+        display: grid;
+        gap: 2px;
+      }
+
+      .history-meta time {
+        color: var(--muted);
+        text-decoration: none;
+      }
+
       .user-id {
         overflow-wrap: anywhere;
         color: var(--muted);
         font-size: 0.78rem;
-      }
-
-      @media (max-width: 420px) {
-        .actions { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -249,11 +233,6 @@ function renderAppPage(
           <span>pt</span>
         </div>
         <p>ログインなしで仮保存中です。あとでログイン連携を追加すると、このポイントを会員アカウントに引き継げます。</p>
-        <div class="actions">
-          <a href="/t/kg-0001">NFC 01</a>
-          <a href="/t/kg-0002">NFC 02</a>
-          <a href="/t/kg-0003">NFC 03</a>
-        </div>
         <span class="user-id">匿名ユーザー: ${escapeHtml(userId)}</span>
       </section>
 
@@ -281,7 +260,10 @@ function renderRewards(rows: RewardRow[]) {
       (row) => `
         <div class="row">
           <strong>${escapeHtml(row.campaign_title)} / +${escapeHtml(row.points)}pt</strong>
-          <span>${escapeHtml(row.tag_label)} / ${escapeHtml(row.occurred_at_jst)}</span>
+          <span class="history-meta">
+            <span>${escapeHtml(formatUserTagLabel(row.tag_label))}</span>
+            <time datetime="${escapeHtml(toDateTimeAttribute(row.occurred_at_jst))}">${escapeHtml(formatJapanDateTime(row.occurred_at_jst))}</time>
+          </span>
         </div>
       `,
     )
@@ -298,9 +280,31 @@ function renderLocks(rows: LockRow[]) {
       (row) => `
         <div class="row">
           <strong>${escapeHtml(row.campaign_title)}</strong>
-          <span>${escapeHtml(row.locked_until_jst)} に再付与できます</span>
+          <span>${escapeHtml(formatJapanDateTime(row.locked_until_jst))} に再付与できます</span>
         </div>
       `,
     )
     .join("");
+}
+
+function formatJapanDateTime(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+
+  if (!match) {
+    return value;
+  }
+
+  const [, year, month, day, hour, minute, second] = match;
+  // iPhone Safariの電話番号自動検出に巻き込まれないよう、数字の区切りを日本語表記にします。
+  return `${year}年${month}月${day}日 ${hour}時${minute}分${second}秒`;
+}
+
+function toDateTimeAttribute(value: string) {
+  return value.replace(" ", "T");
+}
+
+function formatUserTagLabel(value: string) {
+  const label = value.replace(/\s*NFC\s*\d+$/i, "").trim();
+  // ユーザー画面ではNFC番号を見せず、売り場名だけを表示します。
+  return label || "読み取りスポット";
 }
