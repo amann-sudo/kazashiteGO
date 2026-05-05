@@ -36,17 +36,17 @@ npm run pages:dev
 起動後に開くURLです。
 
 - 管理画面: [http://127.0.0.1:8788/admin](http://127.0.0.1:8788/admin)
-- サンプルNFC: [http://127.0.0.1:8788/n/onion-shelf](http://127.0.0.1:8788/n/onion-shelf)
+- サンプルNFC: [http://127.0.0.1:8788/t/kg-0001](http://127.0.0.1:8788/t/kg-0001)
 
 ## 現在の公開URL
 
 - 管理画面: [https://kazashitego.kazashitego-go.workers.dev/admin](https://kazashitego.kazashitego-go.workers.dev/admin)
-- ユーザー画面 / NFC読み取り先: [https://kazashitego.kazashitego-go.workers.dev/n/onion-shelf](https://kazashitego.kazashitego-go.workers.dev/n/onion-shelf)
+- ユーザー画面 / NFC読み取り先: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0001](https://kazashitego.kazashitego-go.workers.dev/t/kg-0001)
 
 NFCタグには、次のURLをNDEFのURIレコードとして書き込みます。
 
 ```text
-https://kazashitego.kazashitego-go.workers.dev/n/onion-shelf
+https://kazashitego.kazashitego-go.workers.dev/t/kg-0001
 ```
 
 ## 主なコマンド

@@ -47,6 +47,9 @@ wrangler-pages-dev*.log
 .dev.vars.*
 !.dev.vars.example
 
+# ユーザー共有用の秘密情報
+/ユーザーが絶対知らなくてはならないこと＆ユーザーが試すための手順.md
+
 # Vercel
 .vercel
 

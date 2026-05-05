@@ -133,7 +133,7 @@ export default function Home() {
           <p className="eyebrow">kazashiteGO</p>
           <h1>NFC広告オペレーション</h1>
         </div>
-        <a className="scan-link" href="/n/onion-shelf">
+        <a className="scan-link" href="/t/kg-0001">
           サンプルNFCを開く
         </a>
       </header>

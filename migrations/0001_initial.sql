@@ -100,7 +100,7 @@ INSERT INTO tags (
   enabled
 ) VALUES
   (
-    'onion-shelf',
+    'kg-0001',
     '玉ねぎ棚 NFC',
     'サンプルスーパー',
     '青果 / 玉ねぎ',
