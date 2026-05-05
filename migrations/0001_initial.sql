@@ -1,5 +1,6 @@
 -- kazashiteGOの初期スキーマです。NFCタグ、広告、日次集計、ポイント履歴をD1に保存します。
 DROP TABLE IF EXISTS point_claims;
+DROP TABLE IF EXISTS scan_events;
 DROP TABLE IF EXISTS scan_counts_daily;
 DROP TABLE IF EXISTS tags;
 DROP TABLE IF EXISTS campaigns;
@@ -43,6 +44,18 @@ CREATE TABLE scan_counts_daily (
   FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
 );
 
+CREATE TABLE scan_events (
+  id TEXT PRIMARY KEY,
+  occurred_at TEXT NOT NULL DEFAULT (datetime('now')),
+  day TEXT NOT NULL,
+  tag_id TEXT NOT NULL,
+  campaign_id TEXT NOT NULL,
+  visitor_id_hash TEXT NOT NULL,
+  user_agent TEXT,
+  FOREIGN KEY (tag_id) REFERENCES tags(id),
+  FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
+);
+
 CREATE TABLE point_claims (
   day TEXT NOT NULL,
   visitor_id_hash TEXT NOT NULL,
@@ -57,6 +70,8 @@ CREATE TABLE point_claims (
 
 CREATE INDEX idx_scan_counts_day ON scan_counts_daily(day);
 CREATE INDEX idx_scan_counts_tag ON scan_counts_daily(tag_id);
+CREATE INDEX idx_scan_events_day_time ON scan_events(day, occurred_at DESC);
+CREATE INDEX idx_scan_events_tag_time ON scan_events(tag_id, occurred_at DESC);
 CREATE INDEX idx_point_claims_tag_day ON point_claims(tag_id, day);
 
 INSERT INTO campaigns (

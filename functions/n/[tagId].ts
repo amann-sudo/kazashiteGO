@@ -22,6 +22,32 @@ export const onRequest: PagesFunction<Env, "tagId"> = async (context) => {
 
   const day = getJapanDay();
   const visitor = await getVisitorIdentity(context.request);
+  const userAgent = (context.request.headers.get("User-Agent") ?? "").slice(0, 240);
+
+  // 日次集計とは別に、管理画面で時分秒を確認できるよう読み取りイベントを1件ずつ保存します。
+  await context.env.DB.prepare(
+    `
+      INSERT INTO scan_events (
+        id,
+        occurred_at,
+        day,
+        tag_id,
+        campaign_id,
+        visitor_id_hash,
+        user_agent
+      )
+      VALUES (?, datetime('now'), ?, ?, ?, ?, ?)
+    `,
+  )
+    .bind(
+      crypto.randomUUID(),
+      day,
+      campaign.tag_id,
+      campaign.campaign_id,
+      visitor.visitorHash,
+      userAgent,
+    )
+    .run();
 
   await context.env.DB.prepare(
     `

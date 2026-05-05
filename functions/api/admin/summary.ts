@@ -29,7 +29,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const range = parseRange(url.searchParams.get("range"));
   const day = getJapanDay();
 
-  const [tags, campaigns, analytics] = await Promise.all([
+  const [tags, campaigns, analytics, dailyChart, weeklyChart, monthlyChart, events] = await Promise.all([
     context.env.DB.prepare(
       `
         SELECT
@@ -86,6 +86,54 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         LIMIT 90
       `,
     ).all(),
+    context.env.DB.prepare(
+      `
+        SELECT day AS period, SUM(count) AS count
+        FROM scan_counts_daily
+        GROUP BY day
+        ORDER BY day DESC
+        LIMIT 14
+      `,
+    ).all(),
+    context.env.DB.prepare(
+      `
+        SELECT strftime('%Y-W%W', day) AS period, SUM(count) AS count
+        FROM scan_counts_daily
+        GROUP BY period
+        ORDER BY period DESC
+        LIMIT 12
+      `,
+    ).all(),
+    context.env.DB.prepare(
+      `
+        SELECT substr(day, 1, 7) AS period, SUM(count) AS count
+        FROM scan_counts_daily
+        GROUP BY period
+        ORDER BY period DESC
+        LIMIT 12
+      `,
+    ).all(),
+    context.env.DB.prepare(
+      `
+        SELECT
+          se.id,
+          se.occurred_at,
+          datetime(se.occurred_at, '+9 hours') AS occurred_at_jst,
+          strftime('%H:%M:%S', datetime(se.occurred_at, '+9 hours')) AS time_jst,
+          se.tag_id,
+          t.label AS tag_label,
+          c.title AS campaign_title,
+          se.user_agent
+        FROM scan_events se
+        INNER JOIN tags t ON t.id = se.tag_id
+        INNER JOIN campaigns c ON c.id = se.campaign_id
+        WHERE se.day = ?
+        ORDER BY se.occurred_at DESC
+        LIMIT 120
+      `,
+    )
+      .bind(day)
+      .all(),
   ]);
 
   return json({
@@ -94,6 +142,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     tags: tags.results,
     campaigns: campaigns.results,
     analytics: analytics.results,
+    charts: {
+      daily: normalizeChart(dailyChart.results).reverse(),
+      weekly: normalizeChart(weeklyChart.results).reverse(),
+      monthly: normalizeChart(monthlyChart.results).reverse(),
+    },
+    events: events.results,
   });
 };
 
@@ -103,4 +157,15 @@ function parseRange(value: string | null): RangeMode {
   }
 
   return "daily";
+}
+
+function normalizeChart(rows: unknown[] | undefined) {
+  return (rows ?? []).map((row) => {
+    const point = row as { period?: string; count?: number };
+
+    return {
+      period: point.period ?? "",
+      count: Number(point.count ?? 0),
+    };
+  });
 }
