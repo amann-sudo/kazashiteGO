@@ -78,6 +78,9 @@ npm run pages:dev
 ```bash
 wrangler d1 create kazashitego-db
 wrangler d1 execute kazashitego-db --remote --file=./migrations/0001_initial.sql
+wrangler d1 execute kazashitego-db --remote --file=./migrations/0003_add_users_points_and_campaigns.sql
+wrangler d1 execute kazashitego-db --remote --file=./migrations/0004_add_three_sample_nfc_tags.sql
 wrangler secret put ADMIN_PASSWORD
-npm run deploy
+npm run build
+wrangler deploy worker.ts --config wrangler.worker.jsonc --assets out --keep-vars
 ```

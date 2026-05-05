@@ -62,8 +62,15 @@ SELECT
   visitor_id_hash,
   MIN(occurred_at),
   MAX(occurred_at)
-FROM scan_events
-WHERE visitor_id_hash IS NOT NULL AND visitor_id_hash != ''
+FROM (
+  SELECT visitor_id_hash, occurred_at
+  FROM scan_events
+  WHERE visitor_id_hash IS NOT NULL AND visitor_id_hash != ''
+  UNION ALL
+  SELECT visitor_id_hash, claimed_at AS occurred_at
+  FROM point_claims
+  WHERE visitor_id_hash IS NOT NULL AND visitor_id_hash != ''
+)
 GROUP BY visitor_id_hash;
 
 UPDATE scan_events
@@ -121,7 +128,7 @@ SELECT
 FROM point_transactions
 GROUP BY user_id, campaign_id;
 
-INSERT OR REPLACE INTO campaigns (
+INSERT INTO campaigns (
   id,
   title,
   description,
@@ -160,4 +167,14 @@ INSERT OR REPLACE INTO campaigns (
     '材料を見る',
     '#',
     1
-  );
+  )
+ON CONFLICT(id)
+DO UPDATE SET
+  title = excluded.title,
+  description = excluded.description,
+  media_path = excluded.media_path,
+  media_type = excluded.media_type,
+  cta_label = excluded.cta_label,
+  cta_url = excluded.cta_url,
+  enabled = excluded.enabled,
+  updated_at = datetime('now');
