@@ -253,13 +253,12 @@ function renderAppPage(
           <a href="/t/kg-0001">NFC 01</a>
           <a href="/t/kg-0002">NFC 02</a>
           <a href="/t/kg-0003">NFC 03</a>
-          <a class="secondary" href="/admin">管理画面</a>
         </div>
         <span class="user-id">匿名ユーザー: ${escapeHtml(userId)}</span>
       </section>
 
       <section class="panel">
-        <h2>24時間ロック中の広告</h2>
+        <h2>本日付与済みの広告</h2>
         ${renderLocks(locks)}
       </section>
 
@@ -291,7 +290,7 @@ function renderRewards(rows: RewardRow[]) {
 
 function renderLocks(rows: LockRow[]) {
   if (rows.length === 0) {
-    return `<p>現在ロック中の広告はありません。</p>`;
+    return `<p>本日付与済みの広告はありません。</p>`;
   }
 
   return rows
@@ -299,7 +298,7 @@ function renderLocks(rows: LockRow[]) {
       (row) => `
         <div class="row">
           <strong>${escapeHtml(row.campaign_title)}</strong>
-          <span>${escapeHtml(row.locked_until_jst)} まで追加ポイントなし</span>
+          <span>${escapeHtml(row.locked_until_jst)} に再付与できます</span>
         </div>
       `,
     )

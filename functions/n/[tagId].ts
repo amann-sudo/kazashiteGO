@@ -2,6 +2,7 @@ import {
   escapeHtml,
   getCampaignForTag,
   getJapanDay,
+  getNextJapanDayStartUtc,
   getOrCreateUser,
   type AppUser,
   type CampaignForTag,
@@ -138,8 +139,9 @@ async function awardPointsIfUnlocked(
   }
 
   const transactionId = crypto.randomUUID();
+  const lockedUntil = getNextJapanDayStartUtc(day);
 
-  // 24時間ロックは広告キャンペーン単位で持ち、同じ広告からの重複付与を防ぎます。
+  // 日付が変わるまでのロックを広告キャンペーン単位で持ち、同じ広告からの重複付与を防ぎます。
   await env.DB.batch([
     env.DB.prepare(
       `
@@ -186,14 +188,14 @@ async function awardPointsIfUnlocked(
           locked_until,
           updated_at
         )
-        VALUES (?, ?, ?, datetime('now', '+1 day'), datetime('now'))
+        VALUES (?, ?, ?, ?, datetime('now'))
         ON CONFLICT(user_id, campaign_id)
         DO UPDATE SET
           tag_id = excluded.tag_id,
           locked_until = excluded.locked_until,
           updated_at = datetime('now')
       `,
-    ).bind(userId, campaign.campaign_id, campaign.tag_id),
+    ).bind(userId, campaign.campaign_id, campaign.tag_id, lockedUntil),
     env.DB.prepare(
       `
         INSERT OR IGNORE INTO point_claims (
@@ -272,10 +274,10 @@ function renderAdPage(
 ) {
   const pointHeadline = reward.awarded
     ? `${reward.points}pt 獲得`
-    : "24時間ロック中";
+    : "本日分は付与済み";
   const pointMessage = reward.awarded
     ? "この広告のポイントを付与しました。"
-    : `${formatLockTime(reward.lockedUntil)} まで、この広告から追加ポイントは付与されません。`;
+    : `${formatLockTime(reward.lockedUntil)} にリセットされます。`;
 
   return `<!doctype html>
 <html lang="ja">
@@ -520,7 +522,7 @@ function renderAdPage(
       <section class="creative">
         ${renderMedia(campaign)}
         <div class="ad-copy">
-          <span class="badge">NFC限定キャンペーン</span>
+          <span class="badge">売り場おすすめ</span>
           <h1>${escapeHtml(campaign.title)}</h1>
           <p class="description">${escapeHtml(campaign.description)}</p>
         </div>
@@ -575,7 +577,7 @@ function renderCta(campaign: CampaignForTag) {
 
 function formatLockTime(value: string | null) {
   if (!value) {
-    return "24時間後";
+    return "明日";
   }
 
   const date = new Date(`${value.replace(" ", "T")}Z`);

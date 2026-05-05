@@ -91,6 +91,11 @@ export function getJapanDay(date = new Date()) {
     .slice(0, 10);
 }
 
+export function getNextJapanDayStartUtc(day: string) {
+  // 日本時間の翌日0時は、UTCでは同じ日付の15時になります。
+  return `${day} 15:00:00`;
+}
+
 export function escapeHtml(value: string | number | null | undefined) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")

@@ -1,4 +1,4 @@
--- 匿名ユーザー、ポイント残高、ポイント取引、24時間ロックを追加します。
+-- 匿名ユーザー、ポイント残高、ポイント取引、日付変更リセットのロックを追加します。
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   anonymous_id_hash TEXT NOT NULL UNIQUE,
@@ -111,7 +111,7 @@ SELECT
 FROM point_transactions
 GROUP BY user_id;
 
--- 既存の付与済み広告は、最後の付与から24時間ロック済みとして扱います。
+-- 既存の付与済み広告は、最後の付与日の日本時間24時までロック済みとして扱います。
 INSERT OR REPLACE INTO reward_locks (
   user_id,
   campaign_id,
@@ -123,7 +123,7 @@ SELECT
   user_id,
   campaign_id,
   tag_id,
-  datetime(MAX(occurred_at), '+1 day'),
+  datetime(date(MAX(occurred_at), '+9 hours') || ' 15:00:00'),
   datetime('now')
 FROM point_transactions
 GROUP BY user_id, campaign_id;

@@ -1,6 +1,6 @@
 # kazashiteGO
 
-iPhoneのNFC読み取りで広告ページを表示し、読み取り回数、匿名ユーザー、ポイント残高、24時間ロックをCloudflare D1に記録するMVPです。
+iPhoneのNFC読み取りで広告ページを表示し、読み取り回数、匿名ユーザー、ポイント残高、日付変更リセットのポイント制限をCloudflare D1に記録するMVPです。
 
 ## 構成
 
@@ -70,7 +70,7 @@ npm run pages:dev
 
 - ログイン前でも、Cookie由来の匿名ユーザーをD1の `users` に保存します。
 - ポイント残高は `user_point_balances`、付与履歴は `point_transactions` に保存します。
-- 同じ広告キャンペーンは、ユーザーごとに `reward_locks` で24時間ロックされます。
+- 同じ広告キャンペーンは、ユーザーごとに `reward_locks` で日本時間の日付が変わるまで再付与されません。
 - 将来ログイン機能を追加すると、匿名ユーザーのポイントを会員ユーザーへ引き継ぐ前提の構成です。
 
 ## Cloudflareへ置くとき
@@ -80,6 +80,7 @@ wrangler d1 create kazashitego-db
 wrangler d1 execute kazashitego-db --remote --file=./migrations/0001_initial.sql
 wrangler d1 execute kazashitego-db --remote --file=./migrations/0003_add_users_points_and_campaigns.sql
 wrangler d1 execute kazashitego-db --remote --file=./migrations/0004_add_three_sample_nfc_tags.sql
+wrangler d1 execute kazashitego-db --remote --file=./migrations/0005_reset_rewards_on_japan_day.sql
 wrangler secret put ADMIN_PASSWORD
 npm run build
 wrangler deploy worker.ts --config wrangler.worker.jsonc --assets out --keep-vars
