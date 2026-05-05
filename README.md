@@ -23,6 +23,17 @@ npm run pages:dev
 - 管理画面: [http://127.0.0.1:8788](http://127.0.0.1:8788)
 - サンプルNFC: [http://127.0.0.1:8788/n/onion-shelf](http://127.0.0.1:8788/n/onion-shelf)
 
+## 現在の公開URL
+
+- 管理画面: [https://kazashitego.kazashitego-go.workers.dev](https://kazashitego.kazashitego-go.workers.dev)
+- ユーザー画面 / NFC読取先: [https://kazashitego.kazashitego-go.workers.dev/n/onion-shelf](https://kazashitego.kazashitego-go.workers.dev/n/onion-shelf)
+
+NFCタグには、次のURLをNDEFのURIレコードとして書き込みます。
+
+```text
+https://kazashitego.kazashitego-go.workers.dev/n/onion-shelf
+```
+
 ## 主なコマンド
 
 ```bash
