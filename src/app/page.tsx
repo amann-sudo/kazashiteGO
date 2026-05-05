@@ -37,6 +37,7 @@ type AnalyticsRow = {
 };
 
 type ChartPoint = {
+  label?: string;
   period: string;
   count: number;
 };
@@ -49,7 +50,26 @@ type ScanEvent = {
   tag_id: string;
   tag_label: string;
   campaign_title: string;
+  user_id: string | null;
   user_agent: string | null;
+};
+
+type UserSummary = {
+  id: string;
+  display_name: string;
+  linked_at: string | null;
+  created_at: string;
+  last_seen_at: string;
+  balance: number;
+  lifetime_points: number;
+  reward_count: number;
+  latest_reward_at: string | null;
+};
+
+type PointStats = {
+  awarded_today: number;
+  outstanding_points: number;
+  user_count: number;
 };
 
 type SummaryResponse = {
@@ -60,6 +80,8 @@ type SummaryResponse = {
   analytics: AnalyticsRow[];
   charts: Record<RangeMode, ChartPoint[]>;
   events: ScanEvent[];
+  users: UserSummary[];
+  pointStats: PointStats;
 };
 
 type TagDraft = {
@@ -118,12 +140,20 @@ export default function Home() {
     const tags = summary?.tags ?? [];
     const scans = tags.reduce((sum, tag) => sum + tag.total_count, 0);
     const today = tags.reduce((sum, tag) => sum + tag.today_count, 0);
-    const points = tags.reduce(
-      (sum, tag) => sum + tag.today_count * tag.point_value,
-      0,
-    );
+    const points = Number(summary?.pointStats?.awarded_today ?? 0);
+    const users = Number(summary?.pointStats?.user_count ?? 0);
+    const outstanding = Number(summary?.pointStats?.outstanding_points ?? 0);
 
-    return { scans, today, points };
+    return { outstanding, points, scans, today, users };
+  }, [summary]);
+
+  const currentCampaign = useMemo(() => {
+    const activeCampaignId = summary?.tags?.[0]?.campaign_id;
+
+    return (
+      summary?.campaigns.find((campaign) => campaign.id === activeCampaignId) ??
+      summary?.campaigns[0]
+    );
   }, [summary]);
 
   async function saveTag(tag: TagSummary, draft: TagDraft) {
@@ -164,7 +194,9 @@ export default function Home() {
       <section className="metric-grid" aria-label="主要指標">
         <Metric label="本日の読み取り" value={nf.format(totals.today)} suffix="回" />
         <Metric label="累計読み取り" value={nf.format(totals.scans)} suffix="回" />
-        <Metric label="本日の付与予定" value={nf.format(totals.points)} suffix="pt" />
+        <Metric label="本日の付与ポイント" value={nf.format(totals.points)} suffix="pt" />
+        <Metric label="匿名ユーザー" value={nf.format(totals.users)} suffix="人" />
+        <Metric label="保有ポイント総数" value={nf.format(totals.outstanding)} suffix="pt" />
       </section>
 
       <section className="chart-grid" aria-label="読み取りグラフ">
@@ -209,17 +241,19 @@ export default function Home() {
               <h2>現在の広告</h2>
             </div>
           </div>
-          <Image
-            className="ad-preview"
-            src="/ads/onion-curry.png"
-            alt="玉ねぎ売り場向けのカレー広告"
-            width={1152}
-            height={1440}
-            priority
-          />
+          {currentCampaign && (
+            <Image
+              className="ad-preview"
+              src={currentCampaign.media_path}
+              alt={`${currentCampaign.title}の広告`}
+              width={1152}
+              height={1440}
+              priority
+            />
+          )}
           <div className="creative-copy">
-            <p>玉ねぎ売り場に連動するサンプル広告です。</p>
-            <strong>今夜は、香り立つカレー。</strong>
+            <p>{currentCampaign?.description ?? "配信中の広告を表示します。"}</p>
+            <strong>{currentCampaign?.title ?? "広告未選択"}</strong>
           </div>
         </div>
       </section>
@@ -292,6 +326,38 @@ export default function Home() {
             <p className="muted empty">
               秒単位の履歴は、イベント保存を追加した後の読み取りから表示されます。
             </p>
+          )}
+        </div>
+      </section>
+
+      <section className="panel analytics-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Users</p>
+            <h2>ユーザー別ポイント</h2>
+          </div>
+          <span>ログイン連携前の匿名ユーザー</span>
+        </div>
+        <div className="user-table">
+          <div className="user-header">
+            <span>ユーザー</span>
+            <span>残高</span>
+            <span>累計</span>
+            <span>最終アクセス</span>
+          </div>
+          {(summary?.users ?? []).map((user) => (
+            <div className="user-row" key={user.id}>
+              <span>
+                {user.display_name}
+                <code>{user.id}</code>
+              </span>
+              <strong>{nf.format(user.balance)}pt</strong>
+              <span>{nf.format(user.lifetime_points)}pt</span>
+              <span>{formatDateTime(user.last_seen_at)}</span>
+            </div>
+          ))}
+          {!loading && (summary?.users ?? []).length === 0 && (
+            <p className="muted empty">まだユーザーがありません。</p>
           )}
         </div>
       </section>
@@ -456,7 +522,7 @@ function ChartCard({
                   <span className="bar-value">{nf.format(point.count)}</span>
                   <i style={{ height: `${height}%` }} />
                 </div>
-                <span className="bar-label">{compactPeriod(point.period)}</span>
+                <span className="bar-label">{point.label ?? compactPeriod(point.period)}</span>
               </div>
             );
           })}
@@ -494,4 +560,12 @@ function shortUserAgent(value: string | null) {
   }
 
   return text ? text.slice(0, 28) : "不明";
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  return value.replace("T", " ").slice(0, 16);
 }

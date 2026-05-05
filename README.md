@@ -1,13 +1,13 @@
 # kazashiteGO
 
-iPhoneのNFC読み取りで広告ページを表示し、読み取り回数と付与ポイントをCloudflare D1に記録するMVPです。
+iPhoneのNFC読み取りで広告ページを表示し、読み取り回数、匿名ユーザー、ポイント残高、24時間ロックをCloudflare D1に記録するMVPです。
 
 ## 構成
 
 - Next.js: 管理画面を静的出力
 - Cloudflare Pages Functions / Workers: NFC広告ページ、管理API、認証
-- Cloudflare D1: NFCタグ、広告キャンペーン、日次集計、ポイント履歴
-- 広告画像: `public/ads/onion-curry.png`
+- Cloudflare D1: NFCタグ、広告キャンペーン、匿名ユーザー、ポイント台帳、日次集計、秒単位履歴
+- 広告画像: `public/ads/onion-curry.png`, `public/ads/onion-soup.png`, `public/ads/onion-steak.png`
 
 ## 認証
 
@@ -37,11 +37,13 @@ npm run pages:dev
 
 - 管理画面: [http://127.0.0.1:8788/admin](http://127.0.0.1:8788/admin)
 - サンプルNFC: [http://127.0.0.1:8788/t/kg-0001](http://127.0.0.1:8788/t/kg-0001)
+- ユーザーポイント画面: [http://127.0.0.1:8788/app](http://127.0.0.1:8788/app)
 
 ## 現在の公開URL
 
 - 管理画面: [https://kazashitego.kazashitego-go.workers.dev/admin](https://kazashitego.kazashitego-go.workers.dev/admin)
 - ユーザー画面 / NFC読み取り先: [https://kazashitego.kazashitego-go.workers.dev/t/kg-0001](https://kazashitego.kazashitego-go.workers.dev/t/kg-0001)
+- ユーザーポイント画面: [https://kazashitego.kazashitego-go.workers.dev/app](https://kazashitego.kazashitego-go.workers.dev/app)
 
 NFCタグには、次のURLをNDEFのURIレコードとして書き込みます。
 
@@ -57,6 +59,13 @@ npm run build
 npm run db:migrate:local
 npm run pages:dev
 ```
+
+## ポイントの考え方
+
+- ログイン前でも、Cookie由来の匿名ユーザーをD1の `users` に保存します。
+- ポイント残高は `user_point_balances`、付与履歴は `point_transactions` に保存します。
+- 同じ広告キャンペーンは、ユーザーごとに `reward_locks` で24時間ロックされます。
+- 将来ログイン機能を追加すると、匿名ユーザーのポイントを会員ユーザーへ引き継ぐ前提の構成です。
 
 ## Cloudflareへ置くとき
 
