@@ -5,13 +5,15 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // Override default ignores of eslint-config-next.
+  // eslint-config-nextの既定除外に、このプロジェクト固有の生成物を追加します。
   globalIgnores([
-    // Default ignores of eslint-config-next:
+    // eslint-config-nextが既定で除外する生成物です。
     ".next/**",
+    ".wrangler/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "worker-configuration.d.ts",
   ]),
 ]);
 

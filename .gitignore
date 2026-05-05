@@ -14,14 +14,20 @@ AGENTS.md
 # テスト結果
 /coverage
 
-# Next.js の生成物
+# Next.jsの生成物
 /.next/
 /out/
+
+# Cloudflare Wranglerのローカル状態
+/.wrangler/
+
+# 一時ファイル
+/tmp/
 
 # 本番ビルド
 /build
 
-# その他
+# OSや証明書
 .DS_Store
 *.pem
 
@@ -31,8 +37,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 next-dev.*.log
+wrangler-pages-dev.*.log
 
-# 環境変数ファイル
+# 環境変数
 .env*
 
 # Vercel

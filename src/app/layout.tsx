@@ -12,10 +12,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// サイト全体で使う基本メタデータです。
+// ブラウザとSNSプレビューで使う基本メタデータです。
 export const metadata: Metadata = {
-  title: "かざしてGO",
-  description: "かざしてGO のサービスサイトです。",
+  title: "kazashiteGO",
+  description: "NFCタグから広告配信と読取分析を行うCloudflare無料枠向けMVPです。",
 };
 
 export default function RootLayout({
@@ -28,7 +28,7 @@ export default function RootLayout({
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body>{children}</body>
     </html>
   );
 }
