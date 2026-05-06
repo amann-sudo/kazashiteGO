@@ -1,5 +1,7 @@
+import { DurableObject } from "cloudflare:workers";
 import { onRequest as handleAdminSummary } from "./functions/api/admin/summary";
 import { onRequest as handleAdminTag } from "./functions/api/admin/tags/[tagId]";
+import { onRequest as handleScreenState } from "./functions/api/screen/[screenId]/state";
 import { onRequest as handleUserMe } from "./functions/api/user/me";
 import { onRequest as handleApp } from "./functions/app";
 import {
@@ -8,9 +10,11 @@ import {
   type Env,
 } from "./functions/lib/shared";
 import { onRequest as handleNfc } from "./functions/n/[tagId]";
+import { onRequest as handleScreen } from "./functions/screen/[screenId]";
 
 type WorkerEnv = Env & {
   ASSETS: Fetcher;
+  SCREEN_HUB: DurableObjectNamespace;
 };
 
 type ExecutionContextLike = {
@@ -43,6 +47,23 @@ const worker: ExportedHandler<WorkerEnv> = {
       return runPageHandler(handleUserMe, request, env, ctx);
     }
 
+    const screenStateMatch = pathname.match(/^\/api\/screen\/([^/]+)\/state$/);
+
+    if (screenStateMatch) {
+      return runPageHandler(handleScreenState, request, env, ctx, {
+        screenId: decodeURIComponent(screenStateMatch[1]),
+      });
+    }
+
+    const screenSocketMatch = pathname.match(/^\/api\/screen\/([^/]+)\/socket$/);
+
+    if (screenSocketMatch) {
+      const screenId = decodeURIComponent(screenSocketMatch[1]);
+      const objectId = env.SCREEN_HUB.idFromName(screenId);
+
+      return env.SCREEN_HUB.get(objectId).fetch(request);
+    }
+
     if (pathname === "/api/admin/summary") {
       return runPageHandler(handleAdminSummary, request, env, ctx);
     }
@@ -57,6 +78,14 @@ const worker: ExportedHandler<WorkerEnv> = {
 
     if (pathname === "/app") {
       return runPageHandler(handleApp, request, env, ctx);
+    }
+
+    const screenMatch = pathname.match(/^\/screen\/([^/]+)$/);
+
+    if (screenMatch) {
+      return runPageHandler(handleScreen, request, env, ctx, {
+        screenId: decodeURIComponent(screenMatch[1]),
+      });
     }
 
     if (pathname === "/n/onion-shelf") {
@@ -87,6 +116,65 @@ const worker: ExportedHandler<WorkerEnv> = {
 };
 
 export default worker;
+
+export class ScreenHub extends DurableObject<WorkerEnv> {
+  constructor(ctx: DurableObjectState, env: WorkerEnv) {
+    super(ctx, env);
+    // 画面側の疎通確認は自動応答にして、接続維持だけでWorkerを起こし続けないようにします。
+    this.ctx.setWebSocketAutoResponse(
+      new WebSocketRequestResponsePair("ping", "pong"),
+    );
+  }
+
+  async fetch(request: Request) {
+    if (request.headers.get("Upgrade") === "websocket") {
+      if (request.method !== "GET") {
+        return new Response("WebSocket requires GET", { status: 400 });
+      }
+
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      this.ctx.acceptWebSocket(server);
+      server.serializeAttachment({ connectedAt: new Date().toISOString() });
+
+      const latest = await this.ctx.storage.get("latest");
+
+      if (latest) {
+        server.send(JSON.stringify({ payload: latest, type: "screen:state" }));
+      }
+
+      return new Response(null, {
+        status: 101,
+        webSocket: client,
+      });
+    }
+
+    if (request.method === "POST") {
+      const payload = await request.json();
+      await this.ctx.storage.put("latest", payload);
+
+      const message = JSON.stringify({ payload, type: "screen:switch" });
+
+      for (const socket of this.ctx.getWebSockets()) {
+        socket.send(message);
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+      });
+    }
+
+    return new Response("Not Found", { status: 404 });
+  }
+
+  webSocketClose(ws: WebSocket, code: number, reason: string) {
+    ws.close(code, reason);
+  }
+
+  webSocketError(ws: WebSocket) {
+    ws.close(1011, "screen socket error");
+  }
+}
 
 function runPageHandler(
   handler: unknown,

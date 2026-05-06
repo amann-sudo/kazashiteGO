@@ -10,6 +10,22 @@
       "migrations_dir": "./migrations"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SCREEN_HUB",
+        "class_name": "ScreenHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-screen-hub",
+      "new_sqlite_classes": [
+        "ScreenHub"
+      ]
+    }
+  ],
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

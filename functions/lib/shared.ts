@@ -1,6 +1,7 @@
 export type Env = {
   DB: D1Database;
   ADMIN_PASSWORD?: string;
+  SCREEN_HUB?: DurableObjectNamespace;
 };
 
 export type VisitorIdentity = {

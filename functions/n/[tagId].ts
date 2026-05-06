@@ -9,6 +9,7 @@ import {
   type Env,
   scalarParam,
 } from "../lib/shared";
+import { notifyScreenSwitch } from "../lib/screens";
 
 type PointBalance = {
   balance: number;
@@ -89,6 +90,13 @@ export const onRequest: PagesFunction<Env, "tagId"> = async (context) => {
     user.id,
     visitor.visitorHash,
     day,
+  );
+
+  context.waitUntil(
+    notifyScreenSwitch(context.env, campaign, user.id).catch((error) => {
+      // 棚前ディスプレイ通知に失敗しても、スマホ側のポイント画面は止めません。
+      console.error("screen notification failed", error);
+    }),
   );
 
   const headers = new Headers({
